@@ -76,7 +76,7 @@ ICudaEngine* createEngine(unsigned int maxBatchSize, IBuilder* builder, IBuilder
     printf("1.16 initialized...\n");
     auto bottleneck_csp17 = bottleneckCSP(network, weightMap, *cat16->getOutput(0), 384,192,2, false, 1, 0.5, "model.17");
     printf("1.17 initialized...\n");
-    IConvolutionLayer* conv18 = network->addConvolutionNd(*bottleneck_csp17->getOutput(0), 3 * (Yolo::CLASS_NUM + 5), DimsHW{1, 1}, weightMap["model.18.weight"], weightMap["model.18.bias"]);
+    // IConvolutionLayer* conv18 = network->addConvolutionNd(*bottleneck_csp17->getOutput(0), 3 * (Yolo::CLASS_NUM + 5), DimsHW{1, 1}, weightMap["model.18.weight"], weightMap["model.18.bias"]);
     printf("1.18 initialized...\n");
 
     auto conv19 = convBnLeaky(network, weightMap, *bottleneck_csp17->getOutput(0), 192, 3, 2, 1, "model.19");
@@ -86,7 +86,7 @@ ICudaEngine* createEngine(unsigned int maxBatchSize, IBuilder* builder, IBuilder
     printf("1.20 initialized...\n");
     auto bottleneck_csp21 = bottleneckCSP(network, weightMap, *cat20->getOutput(0), 384, 384, 2, false, 1, 0.5, "model.21");
     printf("1.21 initialized...\n");
-    IConvolutionLayer* conv22 = network->addConvolutionNd(*bottleneck_csp21->getOutput(0), 3 * (Yolo::CLASS_NUM + 5), DimsHW{1, 1}, weightMap["model.22.weight"], weightMap["model.22.bias"]);
+    // IConvolutionLayer* conv22 = network->addConvolutionNd(*bottleneck_csp21->getOutput(0), 3 * (Yolo::CLASS_NUM + 5), DimsHW{1, 1}, weightMap["model.22.weight"], weightMap["model.22.bias"]);
     printf("1.22 initialized...\n");
 
     auto conv23 = convBnLeaky(network, weightMap, *bottleneck_csp21->getOutput(0), 384, 3, 2, 1, "model.23");
@@ -96,13 +96,13 @@ ICudaEngine* createEngine(unsigned int maxBatchSize, IBuilder* builder, IBuilder
     printf("1.24 initialized...\n");
     auto bottleneck_csp25 = bottleneckCSP(network, weightMap, *cat24->getOutput(0), 768, 768, 2, false, 1, 0.5, "model.25");
     printf("1.25 initialized...\n");
-    IConvolutionLayer* conv26 = network->addConvolutionNd(*bottleneck_csp25->getOutput(0), 3 * (Yolo::CLASS_NUM + 5), DimsHW{1, 1}, weightMap["model.26.weight"], weightMap["model.26.bias"]);
+    // IConvolutionLayer* conv26 = network->addConvolutionNd(*bottleneck_csp25->getOutput(0), 3 * (Yolo::CLASS_NUM + 5), DimsHW{1, 1}, weightMap["model.26.weight"], weightMap["model.26.bias"]);
     printf("head initialized...\n");
     auto creator = getPluginRegistry()->getPluginCreator("YoloLayer_TRT", "1");
     const PluginFieldCollection* pluginData = creator->getFieldNames();
     IPluginV2 *pluginObj = creator->createPlugin("yololayer", pluginData);
-    ITensor* inputTensors_yolo[] = {conv26->getOutput(0), conv22->getOutput(0), conv18->getOutput(0)};
-    //  ITensor* inputTensors_yolo[] = {bottleneck_csp25->getOutput(0),bottleneck_csp21->getOutput(0), bottleneck_csp17->getOutput(0)};
+    // ITensor* inputTensors_yolo[] = {conv26->getOutput(0), conv22->getOutput(0), conv18->getOutput(0)};
+     ITensor* inputTensors_yolo[] = {bottleneck_csp25->getOutput(0),bottleneck_csp21->getOutput(0), bottleneck_csp17->getOutput(0)};
     auto yolo = network->addPluginV2(inputTensors_yolo, 3, *pluginObj);
 
     yolo->getOutput(0)->setName(OUTPUT_BLOB_NAME);
