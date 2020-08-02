@@ -21,7 +21,7 @@ namespace Yolo
         float anchors[CHECK_COUNT*2];
     };
 
-    static constexpr YoloKernel yolo3 = {
+    static constexpr YoloKernel yolo1 = {
         INPUT_W / 32,
         INPUT_H / 32,
         {116,90,  156,198,  373,326}
@@ -31,7 +31,7 @@ namespace Yolo
         INPUT_H / 16,
         {30,61,  62,45,  59,119}
     };
-    static constexpr YoloKernel yolo1 = {
+    static constexpr YoloKernel yolo3 = {
         INPUT_W / 8,
         INPUT_H / 8,
         {10,13,  16,30,  33,23}
