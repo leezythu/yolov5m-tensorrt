@@ -3,7 +3,6 @@
 #include "cuda_runtime_api.h"
 #include "logging.h"
 #include "common.hpp"
-#include<future>
 
 #define USE_FP16  // comment out this if want to use FP32
 #define DEVICE 0  // GPU id
@@ -28,7 +27,7 @@ ICudaEngine* createEngine(unsigned int maxBatchSize, IBuilder* builder, IBuilder
     ITensor* data = network->addInput(INPUT_BLOB_NAME, dt, Dims3{3, INPUT_H, INPUT_W});
     assert(data);
 
-    std::map<std::string, Weights> weightMap = loadWeights("../yolov5m-0702.wts");
+    std::map<std::string, Weights> weightMap = loadWeights("../yolov5m.wts");
     Weights emptywts{DataType::kFLOAT, nullptr, 0};
 
     // yolov5 backbone
@@ -77,33 +76,33 @@ ICudaEngine* createEngine(unsigned int maxBatchSize, IBuilder* builder, IBuilder
     printf("1.16 initialized...\n");
     auto bottleneck_csp17 = bottleneckCSP(network, weightMap, *cat16->getOutput(0), 384,192,2, false, 1, 0.5, "model.17");
     printf("1.17 initialized...\n");
-    IConvolutionLayer* conv18 = network->addConvolutionNd(*bottleneck_csp17->getOutput(0), 3 * (Yolo::CLASS_NUM + 5), DimsHW{1, 1}, weightMap["model.18.weight"], weightMap["model.18.bias"]);
+    // IConvolutionLayer* conv18 = network->addConvolutionNd(*bottleneck_csp17->getOutput(0), 3 * (Yolo::CLASS_NUM + 5), DimsHW{1, 1}, weightMap["model.18.weight"], weightMap["model.18.bias"]);
+    // printf("1.18 initialized...\n");
+
+    auto conv18 = convBnLeaky(network, weightMap, *bottleneck_csp17->getOutput(0), 192, 3, 2, 1, "model.18");
     printf("1.18 initialized...\n");
-
-    auto conv19 = convBnLeaky(network, weightMap, *bottleneck_csp17->getOutput(0), 192, 3, 2, 1, "model.19");
+    ITensor* inputTensors19[] = {conv18->getOutput(0), conv14->getOutput(0)};
+    auto cat19 = network->addConcatenation(inputTensors19, 2);
     printf("1.19 initialized...\n");
-    ITensor* inputTensors20[] = {conv19->getOutput(0), conv14->getOutput(0)};
-    auto cat20 = network->addConcatenation(inputTensors20, 2);
+    auto bottleneck_csp20 = bottleneckCSP(network, weightMap, *cat19->getOutput(0), 384, 384, 2, false, 1, 0.5, "model.20");
     printf("1.20 initialized...\n");
-    auto bottleneck_csp21 = bottleneckCSP(network, weightMap, *cat20->getOutput(0), 384, 384, 2, false, 1, 0.5, "model.21");
-    printf("1.21 initialized...\n");
-    IConvolutionLayer* conv22 = network->addConvolutionNd(*bottleneck_csp21->getOutput(0), 3 * (Yolo::CLASS_NUM + 5), DimsHW{1, 1}, weightMap["model.22.weight"], weightMap["model.22.bias"]);
-    printf("1.22 initialized...\n");
+    // IConvolutionLayer* conv22 = network->addConvolutionNd(*bottleneck_csp21->getOutput(0), 3 * (Yolo::CLASS_NUM + 5), DimsHW{1, 1}, weightMap["model.22.weight"], weightMap["model.22.bias"]);
+    // printf("1.22 initialized...\n");
 
-    auto conv23 = convBnLeaky(network, weightMap, *bottleneck_csp21->getOutput(0), 384, 3, 2, 1, "model.23");
+    auto conv21 = convBnLeaky(network, weightMap, *bottleneck_csp20->getOutput(0), 384, 3, 2, 1, "model.21");
+    printf("1.21 initialized...\n");
+    ITensor* inputTensors22[] = {conv21->getOutput(0), conv10->getOutput(0)};
+    auto cat22 = network->addConcatenation(inputTensors22, 2);
+    printf("1.22 initialized...\n");
+    auto bottleneck_csp23 = bottleneckCSP(network, weightMap, *cat22->getOutput(0), 768, 768, 2, false, 1, 0.5, "model.23");
     printf("1.23 initialized...\n");
-    ITensor* inputTensors24[] = {conv23->getOutput(0), conv10->getOutput(0)};
-    auto cat24 = network->addConcatenation(inputTensors24, 2);
-    printf("1.24 initialized...\n");
-    auto bottleneck_csp25 = bottleneckCSP(network, weightMap, *cat24->getOutput(0), 768, 768, 2, false, 1, 0.5, "model.25");
-    printf("1.25 initialized...\n");
-    IConvolutionLayer* conv26 = network->addConvolutionNd(*bottleneck_csp25->getOutput(0), 3 * (Yolo::CLASS_NUM + 5), DimsHW{1, 1}, weightMap["model.26.weight"], weightMap["model.26.bias"]);
+    // IConvolutionLayer* conv26 = network->addConvolutionNd(*bottleneck_csp25->getOutput(0), 3 * (Yolo::CLASS_NUM + 5), DimsHW{1, 1}, weightMap["model.26.weight"], weightMap["model.26.bias"]);
     printf("head initialized...\n");
     auto creator = getPluginRegistry()->getPluginCreator("YoloLayer_TRT", "1");
     const PluginFieldCollection* pluginData = creator->getFieldNames();
     IPluginV2 *pluginObj = creator->createPlugin("yololayer", pluginData);
-    ITensor* inputTensors_yolo[] = {conv26->getOutput(0), conv22->getOutput(0), conv18->getOutput(0)};
-    //  ITensor* inputTensors_yolo[] = {bottleneck_csp17->getOutput(0),bottleneck_csp20->getOutput(0), bottleneck_csp23->getOutput(0)};
+    // ITensor* inputTensors_yolo[] = {conv26->getOutput(0), conv22->getOutput(0), conv18->getOutput(0)};
+     ITensor* inputTensors_yolo[] = {bottleneck_csp17->getOutput(0),bottleneck_csp20->getOutput(0), bottleneck_csp23->getOutput(0)};
     auto yolo = network->addPluginV2(inputTensors_yolo, 3, *pluginObj);
 
     yolo->getOutput(0)->setName(OUTPUT_BLOB_NAME);
@@ -180,34 +179,6 @@ void doInference(IExecutionContext& context, float* input, float* output, int ba
     CHECK(cudaFree(buffers[inputIndex]));
     CHECK(cudaFree(buffers[outputIndex]));
 }
-void fill_data(cv::Mat& pr_img, float* data,int&b){
-    // for (int i = 0; i < INPUT_H * INPUT_W; i++) {
-    //     data[b * 3 * INPUT_H * INPUT_W + i] = pr_img.at<cv::Vec3b>(i)[2] / 255.0;
-    //     data[b * 3 * INPUT_H * INPUT_W + i + INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[1] / 255.0;
-    //     data[b * 3 * INPUT_H * INPUT_W + i + 2 * INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[0] / 255.0;
-    // }
-    std::future<void> ft1 = async(std::launch::async, [&]{
-        for (int i = 0; i < INPUT_H * INPUT_W; i++) {
-            data[b * 3 * INPUT_H * INPUT_W + i] = pr_img.at<cv::Vec3b>(i)[2] / 255.0;
-        }
-    });
-    
-    std::future<void> ft2 = async(std::launch::async, [&]{
-        for (int i = 0; i < INPUT_H * INPUT_W; i++) {
-            data[b * 3 * INPUT_H * INPUT_W + i + INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[1] / 255.0;
-        }
-    });
-
-    std::future<void> ft3 = async(std::launch::async, [&]{
-        for (int i = 0; i < INPUT_H * INPUT_W; i++) {
-            data[b * 3 * INPUT_H * INPUT_W + i + 2 * INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[0] / 255.0;
-        }
-    });
-    
-    ft1.wait();
-    ft2.wait();
-    ft3.wait();
-}   
 
 int main(int argc, char** argv) {
     cudaSetDevice(DEVICE);
@@ -219,7 +190,7 @@ int main(int argc, char** argv) {
         IHostMemory* modelStream{nullptr};
         APIToModel(BATCH_SIZE, &modelStream);
         assert(modelStream != nullptr);
-        std::ofstream p("yolov5m.engine", std::ios::binary);
+        std::ofstream p("yolov5s.engine", std::ios::binary);
         if (!p) {
             std::cerr << "could not open plan output file" << std::endl;
             return -1;
@@ -228,7 +199,7 @@ int main(int argc, char** argv) {
         modelStream->destroy();
         return 0;
     } else if (argc == 3 && std::string(argv[1]) == "-d") {
-        std::ifstream file("yolov5m.engine", std::ios::binary);
+        std::ifstream file("yolov5s.engine", std::ios::binary);
         if (file.good()) {
             file.seekg(0, file.end);
             size = file.tellg();
@@ -240,8 +211,8 @@ int main(int argc, char** argv) {
         }
     } else {
         std::cerr << "arguments not right!" << std::endl;
-        std::cerr << "./yolov5m -s  // serialize model to plan file" << std::endl;
-        std::cerr << "./yolov5m -d ../samples  // deserialize plan file and run inference" << std::endl;
+        std::cerr << "./yolov5s -s  // serialize model to plan file" << std::endl;
+        std::cerr << "./yolov5s -d ../samples  // deserialize plan file and run inference" << std::endl;
         return -1;
     }
 
@@ -263,43 +234,30 @@ int main(int argc, char** argv) {
     IExecutionContext* context = engine->createExecutionContext();
     assert(context != nullptr);
     delete[] trtModelStream;
-    //start timing
-    auto start = std::chrono::system_clock::now();
-    //preprocess:decode and normalization
+
     int fcount = 0;
-    int total_time = 0;
-    int total_cout = 0;
     for (int f = 0; f < (int)file_names.size(); f++) {
         fcount++;
-        total_cout++;
         if (fcount < BATCH_SIZE && f + 1 != (int)file_names.size()) continue;
         for (int b = 0; b < fcount; b++) {
             cv::Mat img = cv::imread(std::string(argv[2]) + "/" + file_names[f - fcount + 1 + b]);
             if (img.empty()) continue;
             cv::Mat pr_img = preprocess_img(img);
-            fill_data(pr_img,data,b);
-            // for (int i = 0; i < INPUT_H * INPUT_W; i++) {
-            //     data[b * 3 * INPUT_H * INPUT_W + i] = pr_img.at<cv::Vec3b>(i)[2] / 255.0;
-            //     // data[b * 3 * INPUT_H * INPUT_W + i + INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[1] / 255.0;
-            //     // data[b * 3 * INPUT_H * INPUT_W + i + 2 * INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[0] / 255.0;
-            // }
-            // for (int i = 0; i < INPUT_H * INPUT_W; i++){
-            // data[b * 3 * INPUT_H * INPUT_W + i + INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[1] / 255.0;
-            // }
-            // for (int i = 0; i < INPUT_H * INPUT_W; i++){
-            //     data[b * 3 * INPUT_H * INPUT_W + i + 2 * INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[0] / 255.0;
-            // }
+            for (int i = 0; i < INPUT_H * INPUT_W; i++) {
+                data[b * 3 * INPUT_H * INPUT_W + i] = pr_img.at<cv::Vec3b>(i)[2] / 255.0;
+                data[b * 3 * INPUT_H * INPUT_W + i + INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[1] / 255.0;
+                data[b * 3 * INPUT_H * INPUT_W + i + 2 * INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[0] / 255.0;
+            }
         }
 
         // Run inference
-        // auto start = std::chrono::system_clock::now();
+        auto start = std::chrono::system_clock::now();
         doInference(*context, data, prob, BATCH_SIZE);
-        // auto end = std::chrono::system_clock::now();
-        // std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
+        auto end = std::chrono::system_clock::now();
+        std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
         std::vector<std::vector<Yolo::Detection>> batch_res(fcount);
         for (int b = 0; b < fcount; b++) {
             auto& res = batch_res[b];
-            //nms
             nms(res, &prob[b * OUTPUT_SIZE], CONF_THRESH, NMS_THRESH);
         }
         for (int b = 0; b < fcount; b++) {
@@ -314,11 +272,7 @@ int main(int argc, char** argv) {
             cv::imwrite("_" + file_names[f - fcount + 1 + b], img);
         }
         fcount = 0;
-        auto end = std::chrono::system_clock::now();
-        std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
-        total_time+=std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     }
-    std::cout<<"speed:"<<total_time/total_cout<<std::endl;
 
     // Destroy the engine
     context->destroy();
@@ -333,5 +287,6 @@ int main(int argc, char** argv) {
     //    if (i % 10 == 0) std::cout << std::endl;
     //}
     //std::cout << std::endl;
+
     return 0;
 }
