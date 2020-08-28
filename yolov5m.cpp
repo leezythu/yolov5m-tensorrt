@@ -181,32 +181,27 @@ void doInference(IExecutionContext& context, float* input, float* output, int ba
     CHECK(cudaFree(buffers[outputIndex]));
 }
 void fill_data(cv::Mat& pr_img, float* data,int&b){
-    // for (int i = 0; i < INPUT_H * INPUT_W; i++) {
-    //     data[b * 3 * INPUT_H * INPUT_W + i] = pr_img.at<cv::Vec3b>(i)[2] / 255.0;
-    //     data[b * 3 * INPUT_H * INPUT_W + i + INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[1] / 255.0;
-    //     data[b * 3 * INPUT_H * INPUT_W + i + 2 * INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[0] / 255.0;
-    // }
-    std::future<void> ft1 = async(std::launch::async, [&]{
-        for (int i = 0; i < INPUT_H * INPUT_W; i++) {
-            data[b * 3 * INPUT_H * INPUT_W + i] = pr_img.at<cv::Vec3b>(i)[2] / 255.0;
-        }
-    });
+    // std::future<void> ft1 = async(std::launch::async, [&]{
+    //     for (int i = 0; i < INPUT_H * INPUT_W; i++) {
+    //         data[b * 3 * INPUT_H * INPUT_W + i] = pr_img.at<cv::Vec3b>(i)[2] / 255.0;
+    //     }
+    // });
     
-    std::future<void> ft2 = async(std::launch::async, [&]{
-        for (int i = 0; i < INPUT_H * INPUT_W; i++) {
-            data[b * 3 * INPUT_H * INPUT_W + i + INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[1] / 255.0;
-        }
-    });
+    // std::future<void> ft2 = async(std::launch::async, [&]{
+    //     for (int i = 0; i < INPUT_H * INPUT_W; i++) {
+    //         data[b * 3 * INPUT_H * INPUT_W + i + INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[1] / 255.0;
+    //     }
+    // });
 
-    std::future<void> ft3 = async(std::launch::async, [&]{
-        for (int i = 0; i < INPUT_H * INPUT_W; i++) {
-            data[b * 3 * INPUT_H * INPUT_W + i + 2 * INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[0] / 255.0;
-        }
-    });
+    // std::future<void> ft3 = async(std::launch::async, [&]{
+    //     for (int i = 0; i < INPUT_H * INPUT_W; i++) {
+    //         data[b * 3 * INPUT_H * INPUT_W + i + 2 * INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[0] / 255.0;
+    //     }
+    // });
     
-    ft1.wait();
-    ft2.wait();
-    ft3.wait();
+    // ft1.wait();
+    // ft2.wait();
+    // ft3.wait();
 }   
 
 int main(int argc, char** argv) {
@@ -235,7 +230,7 @@ int main(int argc, char** argv) {
             file.seekg(0, file.beg);
             trtModelStream = new char[size];
             assert(trtModelStream);
-            file.read(trtModelStream, size);
+            file.read(trtModelStream, size);//将engine加载入trtmodelstream
             file.close();
         }
     } else {
@@ -246,43 +241,52 @@ int main(int argc, char** argv) {
     }
 
     std::vector<std::string> file_names;
-    if (read_files_in_dir(argv[2], file_names) < 0) {
+    if (read_files_in_dir(argv[2], file_names) < 0) {//将该文件夹下的文件名放入file_names中
         std::cout << "read_files_in_dir failed." << std::endl;
         return -1;
     }
 
     // prepare input data ---------------------------
-    static float data[BATCH_SIZE * 3 * INPUT_H * INPUT_W];
+    static float data[BATCH_SIZE * 3 * INPUT_H * INPUT_W];//每次只处理一个图片
     //for (int i = 0; i < 3 * INPUT_H * INPUT_W; i++)
     //    data[i] = 1.0;
-    static float prob[BATCH_SIZE * OUTPUT_SIZE];
+    static float prob[BATCH_SIZE * OUTPUT_SIZE];//存储的是最后输出的bbox
     IRuntime* runtime = createInferRuntime(gLogger);
     assert(runtime != nullptr);
-    ICudaEngine* engine = runtime->deserializeCudaEngine(trtModelStream, size);
+    ICudaEngine* engine = runtime->deserializeCudaEngine(trtModelStream, size);//解序列化engine
     assert(engine != nullptr);
     IExecutionContext* context = engine->createExecutionContext();
     assert(context != nullptr);
     delete[] trtModelStream;
-    //start timing
-    auto start = std::chrono::system_clock::now();
     //preprocess:decode and normalization
     int fcount = 0;
     int total_time = 0;
     int total_cout = 0;
-    for (int f = 0; f < (int)file_names.size(); f++) {
+    for (int f = 0; f < (int)file_names.size(); f++) {//对每张图片执行相同流程
+        //start timing
+        auto start = std::chrono::system_clock::now();
         fcount++;
         total_cout++;
         if (fcount < BATCH_SIZE && f + 1 != (int)file_names.size()) continue;
+        cv::Mat img;//can only be used when batch_size is 1
         for (int b = 0; b < fcount; b++) {
-            cv::Mat img = cv::imread(std::string(argv[2]) + "/" + file_names[f - fcount + 1 + b]);
+            img = cv::imread(std::string(argv[2]) + "/" + file_names[f - fcount + 1 + b]);
+            // cv::Mat img = cv::imread(std::string(argv[2]) + "/" + file_names[f - fcount + 1 + b]);
             if (img.empty()) continue;
             cv::Mat pr_img = preprocess_img(img);
-            fill_data(pr_img,data,b);
-            // for (int i = 0; i < INPUT_H * INPUT_W; i++) {
-            //     data[b * 3 * INPUT_H * INPUT_W + i] = pr_img.at<cv::Vec3b>(i)[2] / 255.0;
-            //     // data[b * 3 * INPUT_H * INPUT_W + i + INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[1] / 255.0;
-            //     // data[b * 3 * INPUT_H * INPUT_W + i + 2 * INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[0] / 255.0;
-            // }
+            // fill_data(pr_img,data,b);
+            // normalize(pr_img,pr_img,1,0,CV_MINMAX);
+            // cv::Mat pr_img;
+            // pr_img_.convertTo(pr_img,CV_32FC3,1/255.0,0);
+            // cv::Vec3b* ptr = pr_img.ptr<cv::Vec3b>(0);
+            for (int i = 0; i < INPUT_H * INPUT_W; i++) {
+                // data[b * 3 * INPUT_H * INPUT_W + i] =ptr[i][2] /255.0;
+                // data[b * 3 * INPUT_H * INPUT_W + i + INPUT_H * INPUT_W] = ptr[i][1] /255.0;
+                // data[b * 3 * INPUT_H * INPUT_W + i + 2 * INPUT_H * INPUT_W] = ptr[i][0]/255.0 ;
+                data[b * 3 * INPUT_H * INPUT_W + i] = pr_img.at<cv::Vec3b>(i)[2]/255.0 ;
+                data[b * 3 * INPUT_H * INPUT_W + i + INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[1]/255.0 ;
+                data[b * 3 * INPUT_H * INPUT_W + i + 2 * INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[0]/255.0 ;
+            }
             // for (int i = 0; i < INPUT_H * INPUT_W; i++){
             // data[b * 3 * INPUT_H * INPUT_W + i + INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[1] / 255.0;
             // }
@@ -290,23 +294,24 @@ int main(int argc, char** argv) {
             //     data[b * 3 * INPUT_H * INPUT_W + i + 2 * INPUT_H * INPUT_W] = pr_img.at<cv::Vec3b>(i)[0] / 255.0;
             // }
         }
-
+        // auto interval1 = std::chrono::system_clock::now();
         // Run inference
         // auto start = std::chrono::system_clock::now();
-        doInference(*context, data, prob, BATCH_SIZE);
+        doInference(*context, data, prob, BATCH_SIZE);//真正的推理部分
+        // auto interval2 = std::chrono::system_clock::now();
         // auto end = std::chrono::system_clock::now();
         // std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
         std::vector<std::vector<Yolo::Detection>> batch_res(fcount);
         for (int b = 0; b < fcount; b++) {
-            auto& res = batch_res[b];
+            auto& res = batch_res[b]; //res 类型是std::vector<Yolo::Detection>
             //nms
-            nms(res, &prob[b * OUTPUT_SIZE], CONF_THRESH, NMS_THRESH);
+            nms(res, &prob[b * OUTPUT_SIZE], CONF_THRESH, NMS_THRESH);//nms一会儿再说
         }
         for (int b = 0; b < fcount; b++) {
             auto& res = batch_res[b];
             //std::cout << res.size() << std::endl;
-            cv::Mat img = cv::imread(std::string(argv[2]) + "/" + file_names[f - fcount + 1 + b]);
-            for (size_t j = 0; j < res.size(); j++) {
+            // cv::Mat img = cv::imread(std::string(argv[2]) + "/" + file_names[f - fcount + 1 + b]);
+            for (size_t j = 0; j < res.size(); j++) {//画框框，框框的数量是detector的数量
                 cv::Rect r = get_rect(img, res[j].bbox);
                 cv::rectangle(img, r, cv::Scalar(0x27, 0xC1, 0x36), 2);
                 cv::putText(img, std::to_string((int)res[j].class_id), cv::Point(r.x, r.y - 1), cv::FONT_HERSHEY_PLAIN, 1.2, cv::Scalar(0xFF, 0xFF, 0xFF), 2);
@@ -314,8 +319,13 @@ int main(int argc, char** argv) {
             cv::imwrite("_" + file_names[f - fcount + 1 + b], img);
         }
         fcount = 0;
+        //end timing
         auto end = std::chrono::system_clock::now();
-        std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
+        std::cout << std::string(argv[2]) + "/" + file_names[f];
+        // std::cout << "pre_process:"<<std::chrono::duration_cast<std::chrono::milliseconds>(interval1 - start).count() << "ms" << std::endl;
+        // std::cout << "inference:"<<std::chrono::duration_cast<std::chrono::milliseconds>(interval2 - interval1).count() << "ms" << std::endl;
+        // std::cout << "post_process:"<<std::chrono::duration_cast<std::chrono::milliseconds>(end - interval2).count() << "ms" << std::endl;
+        std::cout << "total:"<<std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms" << std::endl;
         total_time+=std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     }
     std::cout<<"speed:"<<total_time/total_cout<<std::endl;

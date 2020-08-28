@@ -91,23 +91,30 @@ bool cmp(Yolo::Detection& a, Yolo::Detection& b) {
 }
 
 void nms(std::vector<Yolo::Detection>& res, float *output, float conf_thresh, float nms_thresh = 0.5) {
-    int det_size = sizeof(Yolo::Detection) / sizeof(float);
+    int det_size = sizeof(Yolo::Detection) / sizeof(float);//一个detection占用几个float
     std::map<float, std::vector<Yolo::Detection>> m;
-    for (int i = 0; i < output[0] && i < 1000; i++) {
+    for (int i = 0; i < output[0] && i < 1000; i++) {//index 0应该存的是数量
         if (output[1 + det_size * i + 4] <= conf_thresh) continue;
         Yolo::Detection det;
-        memcpy(&det, &output[1 + det_size * i], det_size * sizeof(float));
+        memcpy(&det, &output[1 + det_size * i], det_size * sizeof(float));//直接copy到创建的detection中去。
         if (m.count(det.class_id) == 0) m.emplace(det.class_id, std::vector<Yolo::Detection>());
-        m[det.class_id].push_back(det);
+        m[det.class_id].push_back(det);//按照类别将大于conf_thresh的bbox加入向量中。
     }
     for (auto it = m.begin(); it != m.end(); it++) {
         //std::cout << it->second[0].class_id << " --- " << std::endl;
         auto& dets = it->second;
-        std::sort(dets.begin(), dets.end(), cmp);
+        std::sort(dets.begin(), dets.end(), cmp);//按照conf排序
         for (size_t m = 0; m < dets.size(); ++m) {
             auto& item = dets[m];
+            //softnms
+            // if(item.conf<=conf_thresh)continue;
+            // res.push_back(item);
+            //classic nms
             res.push_back(item);
             for (size_t n = m + 1; n < dets.size(); ++n) {
+                //softnms
+                // dets[n].conf *= (1-iou(item.bbox, dets[n].bbox));
+                //classic nms
                 if (iou(item.bbox, dets[n].bbox) > nms_thresh) {
                     dets.erase(dets.begin()+n);
                     --n;
